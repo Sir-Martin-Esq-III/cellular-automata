@@ -2,13 +2,6 @@
 #include <vector>
 #include <iostream>
 
-
-void checkMouseIntersect(sf::Vector2f mousePos) {
-
-
-
-}
-
 //Marsaglia's xorshf generator
 static unsigned long x = 123456789, y = 362436069, z = 521288629;
 
@@ -26,15 +19,13 @@ unsigned long xorshf96(void) {          //period 2^96-1
 	return z;
 }
 
-
 class cell
 {
 public:
-	int type;
+	int type=0;
 	int health = 10;
 	sf::RectangleShape shape;//Predator or prey
 	cell(int xoffset, int yoffset);
-	void  update_type(sf::Color, int ntype);
 	~cell();
 
 private:
@@ -43,15 +34,11 @@ private:
 
 cell::cell(int xoffset,int yoffset)
 {
-	shape.setSize(sf::Vector2f(3, 3));
+	shape.setSize(sf::Vector2f(19, 19));
 	shape.setOutlineThickness(1);
-	shape.setPosition(4 * xoffset, 4 * yoffset);
+	shape.setPosition(20 * xoffset, 20 * yoffset);
 	shape.setOutlineColor(sf::Color::Black);
 
-}
-void cell::update_type(sf::Color color, int ntype) {
-	//shape.setFillColor(color);
-	type = ntype;
 }
 
 cell::~cell()
@@ -59,10 +46,9 @@ cell::~cell()
 }
 std::vector <std::vector<cell> > createGrid(int width, int height) {
 	std::vector<std::vector<cell>> grid;
-	for (int xOff = 0; xOff < floor(width / 4); xOff++) {
+	for (int xOff = 0; xOff < floor(width / 20); xOff++) {
 		std::vector<cell> row;
-		for (int yOff = 0; yOff < floor(height / 4); yOff++) {		
-			int number = xorshf96();
+		for (int yOff = 0; yOff < floor(height / 20); yOff++) {		
 			cell Cell(xOff,yOff);
 			row.push_back(Cell);
 		}
@@ -70,6 +56,30 @@ std::vector <std::vector<cell> > createGrid(int width, int height) {
 	}
 	return grid;
 }
+
+
+std::vector<std::vector<cell>> checkMouseIntersect(sf::Vector2f mousePos,int width,int height,sf::Event event,std::vector<std::vector<cell>> Grid) {
+	for (int xOff = 0; xOff < floor(width / 20); xOff++) {
+		for (int yOff = 0; yOff < floor(height / 20); yOff++) {
+			if (Grid[xOff][yOff].shape.getGlobalBounds().contains(mousePos)) {
+				if (event.mouseButton.button == sf::Mouse::Button::Left) {//Add prey
+					Grid[xOff][yOff].shape.setFillColor(sf::Color::Green);
+					Grid[xOff][yOff].type = 1;
+					return Grid;
+				}
+				else { //add predator
+					Grid[xOff][yOff].shape.setFillColor(sf::Color::Red);
+					Grid[xOff][yOff].type = 2;
+					return Grid;
+				}
+			}
+		}
+	}
+}
+
+
+
+
 int main()
 {
 	int height =900;
@@ -77,7 +87,7 @@ int main()
 	std::vector <std::vector<cell> > Grid;
 	sf::RenderWindow window(sf::VideoMode(width, height), "SFML works!");
 	Grid = createGrid(width, height);
-
+	bool simMode = false;
 	while (window.isOpen())
 	{
 		
@@ -86,33 +96,36 @@ int main()
 		{
 			if (event.type == sf::Event::Closed)
 				window.close();
-			if (event.type == sf::Event::MouseButtonPressed) {
-				sf::Vector2f mousePos = (sf::Vector2f)sf::Mouse::getPosition(window);
-				for (int xOff = 0; xOff < floor(width / 4); xOff++) {
-					for (int yOff = 0; yOff < floor(height / 4); yOff++) {
-						if (Grid[xOff][yOff].shape.getGlobalBounds().contains(mousePos)){
-							if (event.mouseButton.button == sf::Mouse::Button::Left) {//Add prey
-								Grid[xOff][yOff].shape.setFillColor(sf::Color::Green);
-								break;
-							}
-							else { //add predator
-								Grid[xOff][yOff].shape.setFillColor(sf::Color::Red);
-								break;
-							}
-						}
-					}
+			if (event.type == sf::Event::KeyPressed) {
+				if (event.key.code == sf::Keyboard::Return) {
+					simMode = true;  
 				}
-				
+			}
+			if (event.type == sf::Event::MouseButtonPressed &&!simMode) {
+				sf::Vector2f mousePos = (sf::Vector2f)sf::Mouse::getPosition(window);
+				Grid=checkMouseIntersect(mousePos,width,height,event,Grid);
 			}
 		}
 
+
+		//Simulation loop
+		if (simMode) {
+			for (int xOff = 0; xOff < floor(width / 20); xOff++) {
+				for (int yOff = 0; yOff < floor(height / 20); yOff++) {
+					if (!Grid[xOff][yOff].type == 0) {//If not empty
+						cell Copy(-20, -20);
+					}
+				}
+			}
+		}
+		//Rendering loop
 		window.clear();
-		
-		for (int xOff = 0; xOff < floor(width / 4); xOff++) {
-			for (int yOff = 0; yOff < floor(height / 4); yOff++) {
-				//Move in a direction
+		for (int xOff = 0; xOff < floor(width / 20); xOff++) {
+			for (int yOff = 0; yOff < floor(height / 20); yOff++) {
+				
 				window.draw(Grid[xOff][yOff].shape);
 			}
+			
 		}
 		
 		window.display();

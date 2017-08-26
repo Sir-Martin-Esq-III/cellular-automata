@@ -1,23 +1,10 @@
 #include <SFML/Graphics.hpp>
 #include <vector>
 #include <iostream>
+#include <algorithm>
+#include <stdlib.h>
+#include <time.h>
 
-//Marsaglia's xorshf generator
-static unsigned long x = 123456789, y = 362436069, z = 521288629;
-
-unsigned long xorshf96(void) {          //period 2^96-1
-	unsigned long t;
-	x ^= x << 16;
-	x ^= x >> 5;
-	x ^= x << 1;
-
-	t = x;
-	x = y;
-	y = z;
-	z = t ^ x ^ y;
-
-	return z;
-}
 
 class cell
 {
@@ -25,6 +12,8 @@ public:
 	int type=0;
 	int health = 10;
 	sf::RectangleShape shape;//Predator or prey
+	void changeType(int newType);
+	sf::Color returnColor();
 	cell(int xoffset, int yoffset);
 	~cell();
 
@@ -41,6 +30,45 @@ cell::cell(int xoffset,int yoffset)
 
 }
 
+sf::Color cell::returnColor() {
+	return this->shape.getFillColor();
+}
+
+void cell::changeType(int newType) {
+	switch (type)
+	{
+	case 1:
+		shape.setFillColor(sf::Color::Green);
+		break;
+	case 2: 
+		shape.setFillColor(sf::Color::Red);
+		break;
+	default:
+		shape.setFillColor(sf::Color::White);
+		break;
+	}
+	//type = newType;
+/*Move in a random direction
+Check if the movement in that direction is valid
+
+PREY VALID MOVES
+Need to increase health until it reaches a theshold at which a new prey is created
+->Pred
+-->Prey changes to Prey and Prey goes back to full health
+
+->Empty
+-->Empty cell changes to prey amd prev prey goes to empty
+
+Pred VALID MOVES
+Need to lower the health each generation
+->Prey
+-->Prey cell turns to Pred and current Pred full health
+
+->Empty
+-->Empty cell changes to Pred and prev pred goes to empty
+
+*/
+}
 cell::~cell()
 {
 }
@@ -65,19 +93,33 @@ std::vector<std::vector<cell>> checkMouseIntersect(sf::Vector2f mousePos,int wid
 				if (event.mouseButton.button == sf::Mouse::Button::Left) {//Add prey
 					Grid[xOff][yOff].shape.setFillColor(sf::Color::Green);
 					Grid[xOff][yOff].type = 1;
-					return Grid;
 				}
-				else { //add predator
+				else {
 					Grid[xOff][yOff].shape.setFillColor(sf::Color::Red);
-					Grid[xOff][yOff].type = 2;
-					return Grid;
+					Grid[xOff][yOff].type = 2;	
 				}
+				return Grid;
 			}
 		}
 	}
 }
 
+void swapCells(cell &cell1, cell &cell2) {
+	cell dupe = cell1;
+	cell1.type = cell2.type;
+	cell1.health = cell2.health;
+	cell1.shape.setFillColor(cell2.returnColor());
 
+	cell2.type = dupe.type;
+	cell2.health = dupe.health;
+	cell2.shape.setFillColor(dupe.shape.getFillColor());
+}
+
+void createEmptyCell(cell &cell1) {
+	cell1.health = 1;
+	cell1.shape.setFillColor(sf::Color::White);
+	cell1.type = 0;
+}
 
 
 int main()
@@ -98,7 +140,12 @@ int main()
 				window.close();
 			if (event.type == sf::Event::KeyPressed) {
 				if (event.key.code == sf::Keyboard::Return) {
-					simMode = true;  
+					if (simMode) {
+						simMode = false;
+					}
+					else {
+						simMode = true;
+					}
 				}
 			}
 			if (event.type == sf::Event::MouseButtonPressed &&!simMode) {
@@ -110,10 +157,26 @@ int main()
 
 		//Simulation loop
 		if (simMode) {
+			cell* lastEmptyCell;
 			for (int xOff = 0; xOff < floor(width / 20); xOff++) {
 				for (int yOff = 0; yOff < floor(height / 20); yOff++) {
-					if (!Grid[xOff][yOff].type == 0) {//If not empty
-						cell Copy(-20, -20);
+					cell* currentCell = &Grid[xOff][yOff];
+					switch (Grid[xOff][yOff].type){
+					case 0://Empty cell
+						lastEmptyCell = currentCell;
+						break;
+					case 1://Prey	
+						if (yOff - 1 < 0) {
+							createEmptyCell(*currentCell);
+							break;
+						}
+						swapCells(*currentCell, Grid[xOff][yOff - 1]);
+						break;
+					case 2://Predator
+						break;
+					default:
+						std::cout << "Error, check if there is a valid cell type" << '\n';
+						break;
 					}
 				}
 			}
@@ -122,12 +185,11 @@ int main()
 		window.clear();
 		for (int xOff = 0; xOff < floor(width / 20); xOff++) {
 			for (int yOff = 0; yOff < floor(height / 20); yOff++) {
-				
+				Grid[xOff][yOff].changeType(2);
 				window.draw(Grid[xOff][yOff].shape);
 			}
 			
-		}
-		
+		}	
 		window.display();
 	}
 

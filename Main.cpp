@@ -5,16 +5,37 @@
 #include <stdlib.h>
 #include <time.h>
 
+//TO DO:
+// Check quadrents for mouse input
+// Fix non random cell placement
+
+int cellSize = 4;
+//Marsaglia's xorshf generator
+static unsigned long x = 1231056789, y = 3621036069, z = 521288629;
+
+unsigned long xorshf96(void) {          //period 2^96-1
+	unsigned long t;
+	x ^= x << 16;
+	x ^= x >> 5;
+	x ^= x << 1;
+
+	t = x;
+	x = y;
+	y = z;
+	z = t ^ x ^ y;
+
+	return z;
+}
+
 
 class cell
 {
 public:
 	int type=0;
-	int health = 10;
 	sf::RectangleShape shape;//Predator or prey
 	void changeType(int newType);
-	sf::Color returnColor();
 	cell(int xoffset, int yoffset);
+	
 	~cell();
 
 private:
@@ -23,61 +44,45 @@ private:
 
 cell::cell(int xoffset,int yoffset)
 {
-	shape.setSize(sf::Vector2f(19, 19));
+	shape.setSize(sf::Vector2f(cellSize,cellSize));
 	shape.setOutlineThickness(1);
-	shape.setPosition(20 * xoffset, 20 * yoffset);
-	shape.setOutlineColor(sf::Color::Black);
-
-}
-
-sf::Color cell::returnColor() {
-	return this->shape.getFillColor();
+	shape.setPosition(cellSize * xoffset, cellSize * yoffset);
 }
 
 void cell::changeType(int newType) {
-	switch (type)
+	switch (newType)
 	{
+	case 0:
+		this->shape.setFillColor(sf::Color::White);
+		break;
 	case 1:
-		shape.setFillColor(sf::Color::Green);
+		this->shape.setFillColor(sf::Color::Green);
 		break;
 	case 2: 
-		shape.setFillColor(sf::Color::Red);
+		this->shape.setFillColor(sf::Color::Red);
 		break;
 	default:
-		shape.setFillColor(sf::Color::White);
 		break;
 	}
-	//type = newType;
-/*Move in a random direction
-Check if the movement in that direction is valid
-
-PREY VALID MOVES
-Need to increase health until it reaches a theshold at which a new prey is created
-->Pred
--->Prey changes to Prey and Prey goes back to full health
-
-->Empty
--->Empty cell changes to prey amd prev prey goes to empty
-
-Pred VALID MOVES
-Need to lower the health each generation
-->Prey
--->Prey cell turns to Pred and current Pred full health
-
-->Empty
--->Empty cell changes to Pred and prev pred goes to empty
-
-*/
+	type = newType;
 }
 cell::~cell()
 {
 }
+//Creates the grid
 std::vector <std::vector<cell> > createGrid(int width, int height) {
 	std::vector<std::vector<cell>> grid;
-	for (int xOff = 0; xOff < floor(width / 20); xOff++) {
+	for (int xOff = 0; xOff < floor(width / cellSize); xOff++) {
 		std::vector<cell> row;
-		for (int yOff = 0; yOff < floor(height / 20); yOff++) {		
+		for (int yOff = 0; yOff < floor(height / cellSize); yOff++) {		
 			cell Cell(xOff,yOff);
+			int randomNumber = xorshf96();
+			if (randomNumber % 3 == 0) {
+				Cell.changeType(1);
+			}
+			else {
+				Cell.changeType(2);
+			}
 			row.push_back(Cell);
 		}
 		grid.push_back(row);
@@ -85,10 +90,10 @@ std::vector <std::vector<cell> > createGrid(int width, int height) {
 	return grid;
 }
 
-
+//Checks what cell the mouse intersects for input
 std::vector<std::vector<cell>> checkMouseIntersect(sf::Vector2f mousePos,int width,int height,sf::Event event,std::vector<std::vector<cell>> Grid) {
-	for (int xOff = 0; xOff < floor(width / 20); xOff++) {
-		for (int yOff = 0; yOff < floor(height / 20); yOff++) {
+	for (int xOff = 0; xOff < floor(width / cellSize); xOff++) {
+		for (int yOff = 0; yOff < floor(height / cellSize); yOff++) {
 			if (Grid[xOff][yOff].shape.getGlobalBounds().contains(mousePos)) {
 				if (event.mouseButton.button == sf::Mouse::Button::Left) {//Add prey
 					Grid[xOff][yOff].shape.setFillColor(sf::Color::Green);
@@ -104,30 +109,30 @@ std::vector<std::vector<cell>> checkMouseIntersect(sf::Vector2f mousePos,int wid
 	}
 }
 
+//Swaps cells if they are different types
 void swapCells(cell &cell1, cell &cell2) {
-	cell dupe = cell1;
-	cell1.type = cell2.type;
-	cell1.health = cell2.health;
-	cell1.shape.setFillColor(cell2.returnColor());
+	cell *dupe = nullptr;
+	if (cell1.type != cell2.type) {//We know that the prey will be eaten
+		dupe = &cell1;
+	}
+	else {
+		dupe = &cell2;
+	}
+	cell1.changeType(cell2.type);
 
-	cell2.type = dupe.type;
-	cell2.health = dupe.health;
-	cell2.shape.setFillColor(dupe.shape.getFillColor());
-}
-
-void createEmptyCell(cell &cell1) {
-	cell1.health = 1;
-	cell1.shape.setFillColor(sf::Color::White);
-	cell1.type = 0;
+	cell2.changeType(dupe->type);
 }
 
 
 int main()
 {
-	int height =900;
-	int width= 1200;
+	std::cout << "Please enter the cell size, It will create a grid of (1920*1080)/(cellsize^2) so don't put anything too low: ";
+	std::cin >> cellSize;
+	srand(time(NULL));
+	int height =1080;
+	int width= 1920;
 	std::vector <std::vector<cell> > Grid;
-	sf::RenderWindow window(sf::VideoMode(width, height), "SFML works!");
+	sf::RenderWindow window(sf::VideoMode(width, height), "cellular-automata");
 	Grid = createGrid(width, height);
 	bool simMode = false;
 	while (window.isOpen())
@@ -157,41 +162,56 @@ int main()
 
 		//Simulation loop
 		if (simMode) {
-			cell* lastEmptyCell;
-			for (int xOff = 0; xOff < floor(width / 20); xOff++) {
-				for (int yOff = 0; yOff < floor(height / 20); yOff++) {
+			cell* lastEmptyCell=nullptr;
+			for (int xOff = 0; xOff < floor(width / cellSize); xOff++) {
+				for (int yOff = 0; yOff < floor(height / cellSize); yOff++) {
 					cell* currentCell = &Grid[xOff][yOff];
-					switch (Grid[xOff][yOff].type){
-					case 0://Empty cell
-						lastEmptyCell = currentCell;
+					int randomNumber = rand() % 4 + 1;
+					int newXcoord = xOff;
+					int newYcoord = yOff;
+					//Get Position of movement;
+					switch (randomNumber){
+					case 1://Up
+						newYcoord--;
 						break;
-					case 1://Prey	
-						if (yOff - 1 < 0) {
-							createEmptyCell(*currentCell);
-							break;
-						}
-						swapCells(*currentCell, Grid[xOff][yOff - 1]);
+					case 2://Down
+						newYcoord++;
 						break;
-					case 2://Predator
+					case 3://Left
+						newXcoord--;
+						break;
+					case 4://Right
+						newXcoord++;
 						break;
 					default:
-						std::cout << "Error, check if there is a valid cell type" << '\n';
 						break;
+					}
+					if (newYcoord <= 0 || newYcoord >= height / cellSize || newXcoord< 0 || newXcoord >= width / cellSize) {
+						currentCell->changeType(0);
+						break;
+					}
+					else {
+						swapCells(*currentCell, Grid[newXcoord][newYcoord]);
 					}
 				}
 			}
 		}
+
 		//Rendering loop
 		window.clear();
-		for (int xOff = 0; xOff < floor(width / 20); xOff++) {
-			for (int yOff = 0; yOff < floor(height / 20); yOff++) {
-				Grid[xOff][yOff].changeType(2);
+		for (int xOff = 0; xOff < floor(width / cellSize); xOff++) {
+			for (int yOff = 0; yOff < floor(height / cellSize); yOff++) {
+				if (!simMode) {
+					Grid[xOff][yOff].shape.setOutlineThickness(1);
+				}
+				else {
+					Grid[xOff][yOff].shape.setOutlineThickness(0);
+				}
+
 				window.draw(Grid[xOff][yOff].shape);
 			}
-			
 		}	
 		window.display();
 	}
-
 	return 0;
 }
